@@ -355,12 +355,221 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
   .bom-table td{color:#444!important}
   @page{margin:2cm}
 }
-@media(max-width:640px){
-  .app-header,.nav-bar,.main{padding-left:1rem;padding-right:1rem}
-  .form-row{grid-template-columns:1fr}
-  .logo-sub{display:none}
-  .projects-grid{grid-template-columns:1fr}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — TABLET  (≤900px)
+═══════════════════════════════════════════════════════ */
+@media(max-width:900px){
+  .main{padding:1.25rem}
+  .section-header{gap:8px}
+  .section-left{flex-wrap:wrap;gap:8px}
+  .search-wrap{max-width:100%;flex:1 1 180px}
+  .bom-table th:nth-child(3),
+  .bom-table td:nth-child(3){display:none} /* hide Budget col on tablet */
 }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (≤640px)
+═══════════════════════════════════════════════════════ */
+@media(max-width:640px){
+
+  /* ── GLOBAL ── */
+  body{font-size:13px}
+
+  /* ── HEADER ── */
+  .app-header{
+    padding:0 .875rem;
+    height:56px;
+    gap:8px;
+  }
+  .logo-mark{width:30px;height:30px;font-size:14px;border-radius:6px}
+  .logo-text{font-size:15px}
+  .logo-sub{display:none}                    /* drop subtitle entirely */
+  .header-right{gap:6px}
+
+  /* Activity light — dot only on mobile, no text label */
+  .api-light{
+    padding:0;
+    width:28px;height:28px;
+    border-radius:50%;
+    justify-content:center;
+    gap:0;
+  }
+  #apiLightLabel{display:none}               /* hide "Groq — Ready" text */
+
+  /* New Project — icon + text but smaller */
+  .btn-primary.btn-sm{
+    padding:6px 10px;
+    font-size:12px;
+  }
+
+  /* Settings menu — full-width on mobile */
+  .settings-menu{
+    width:calc(100vw - 1.75rem);
+    right:0;
+    left:auto;
+    max-width:320px;
+  }
+
+  /* ── NAV BAR ── */
+  .nav-bar{padding:0 .875rem}
+  .nav-tab{padding:11px 14px;font-size:12px;letter-spacing:0}
+
+  /* ── MAIN ── */
+  .main{padding:.875rem}
+
+  /* ── SECTION HEADER ── */
+  .section-header{
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px;
+    margin-bottom:1rem;
+  }
+  .section-left{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:nowrap;
+  }
+  .section-title{font-size:18px}
+  .section-count{font-size:11px}
+  .search-wrap{flex:1;max-width:100%}
+  .search-input{font-size:12px;padding:6px 26px 6px 28px}
+
+  /* Toolbar wraps neatly below title+search */
+  .toolbar{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    scrollbar-width:none;
+    padding-bottom:2px;
+  }
+  .toolbar::-webkit-scrollbar{display:none}
+  .toolbar-select{font-size:11px;padding:5px 8px;flex-shrink:0}
+  .toolbar .btn-ghost{font-size:11px;padding:5px 10px;flex-shrink:0}
+
+  /* ── PROJECT CARDS ── */
+  /* Card head: stack template badge on its own row above title */
+  .card-head{
+    padding:10px 14px;
+    gap:10px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  /* Left side: badge + title block flow naturally */
+  .template-badge{
+    font-size:9px;
+    padding:2px 7px;
+    letter-spacing:.4px;
+    flex-shrink:0;
+    align-self:center;
+  }
+
+  .card-title-block{min-width:0;flex:1}
+  .card-title{font-size:13px}
+
+  /* Card meta: one stat per row feel — wrap tightly */
+  .card-meta{
+    gap:6px 10px;
+    font-size:11px;
+    margin-top:4px;
+  }
+
+  /* Status pill and toggle float right in their own row */
+  .status-pill{
+    font-size:10px;
+    padding:2px 8px;
+    align-self:center;
+    flex-shrink:0;
+  }
+  .card-toggle{
+    font-size:16px;
+    align-self:center;
+    flex-shrink:0;
+    padding:2px 0;
+  }
+
+  /* Stage pill in meta — keep tight */
+  .stage-pill{
+    font-size:9px;
+    padding:1px 6px;
+    letter-spacing:.3px;
+  }
+
+  /* Tags inline with meta — smaller */
+  .tag{font-size:9px;padding:1px 6px}
+
+  /* Card tab strip — scrollable, smaller tabs */
+  .card-tab{padding:8px 12px;font-size:11px}
+  .card-panel{padding:1rem 14px}
+
+  /* ── LOG ENTRIES ── */
+  .log-head{
+    gap:6px;
+    padding:8px 10px;
+    flex-wrap:nowrap;
+    overflow:hidden;
+  }
+  .log-type{font-size:9px;padding:1px 5px;flex-shrink:0}
+  .log-label-pill{
+    display:none;           /* drop stage label on mobile — too cramped */
+  }
+  .log-summary{font-size:12px}
+  .log-date{font-size:10px;display:none} /* drop date — reclaim space */
+  .log-content{padding:10px 12px;font-size:12px}
+
+  /* ── BOM TABLE ── */
+  /* Hide less-essential columns on mobile */
+  .bom-table th:nth-child(3),
+  .bom-table td:nth-child(3),  /* Budget col */
+  .bom-table th:nth-child(5),
+  .bom-table td:nth-child(5){  /* Date col */
+    display:none;
+  }
+  .bom-table th,.bom-table td{padding:8px 10px;font-size:11px}
+  .bom-status-pill{font-size:10px;padding:2px 7px}
+  .bom-totals{gap:16px}
+  .bom-stat-value{font-size:18px}
+
+  /* ── VAULT ── */
+  .vault-url{max-width:160px}
+
+  /* ── FORMS ── */
+  .form-row{grid-template-columns:1fr}
+  .modal{border-radius:12px 12px 0 0;max-height:92vh}
+  .modal-overlay{padding:0;align-items:flex-end}  /* sheet-style on mobile */
+  .modal-body{padding:16px}
+  .modal-header{padding:16px 16px 0}
+  .modal-footer{padding:12px 16px 16px}
+
+  /* ── GRID VIEW ── */
+  .projects-grid{grid-template-columns:1fr}
+
+  /* ── TOAST ── */
+  .toast-wrap{
+    bottom:1rem;right:.75rem;left:.75rem;
+    align-items:stretch;
+  }
+  .toast{min-width:unset;width:100%}
+
+  /* ── SCRATCH PAD ── */
+  .scratch-save-row{flex-direction:column;align-items:flex-end;gap:6px}
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — VERY SMALL  (≤380px — older phones)
+═══════════════════════════════════════════════════════ */
+@media(max-width:380px){
+  .nav-tab{padding:10px 10px;font-size:11px}
+  .btn-primary.btn-sm{font-size:11px;padding:5px 8px}
+  .section-title{font-size:16px}
+  .card-title{font-size:12px}
+  .template-badge{font-size:8px;padding:2px 5px}
+}
+
 </style>
 </head>
 <body>
