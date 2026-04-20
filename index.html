@@ -328,6 +328,24 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
 .project-overlay.open{display:flex}
 .overlay-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:920px;box-shadow:var(--shadow-lg);animation:modalIn .2s ease}
 
+
+/* PROJECT CHAT */
+.pchat-area{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);height:340px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+.pchat-area .chat-msg.system{font-size:12px;color:var(--text-muted);padding:0;background:none;border:none;align-self:center;text-align:center;max-width:90%;line-height:1.5}
+.pchat-preview{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-top:10px;display:none}
+.pchat-preview.show{display:block}
+.pchat-preview-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.pchat-preview-title span{color:var(--teal)}
+.pchat-field{margin-bottom:8px;display:flex;gap:8px;align-items:baseline}
+.pchat-field-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:600;white-space:nowrap;min-width:64px}
+.pchat-field-value{font-size:13px;color:var(--text);flex:1}
+.pchat-field-value.muted{color:var(--text-dim)}
+.pchat-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
+.pchat-step{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);padding:8px 0 4px}
+.pchat-step-dot{width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.pchat-step-dot.done{background:var(--teal-dim);border-color:var(--teal-border);color:var(--teal)}
+.pchat-step-dot.active{background:var(--gold-dim);border-color:rgba(201,162,39,.4);color:var(--gold)}
+
 /* TOAST */
 .toast-wrap{position:fixed;bottom:1.75rem;right:1.75rem;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);animation:toastIn .25s ease;min-width:220px}
@@ -375,6 +393,7 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
 
   /* ── GLOBAL ── */
   body{font-size:13px}
+  .pchat-btn-label{display:none}
 
   /* ── HEADER ── */
   .app-header{
@@ -604,6 +623,7 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
     <div class="api-light" id="apiLight" onclick="testKey()" title="Click to test API connection">
       <div class="light-dot"></div><span id="apiLightLabel">No Key</span>
     </div>
+    <button class="btn btn-teal btn-sm" onclick="openProjectChat()" title="Chat with AI to plan your next project" style="gap:5px">💬 <span class="pchat-btn-label">AI Plan</span></button>
     <button class="btn btn-primary btn-sm" onclick="openNewProject()">＋ New Project</button>
     <div class="settings-wrap" id="settingsWrap">
       <button class="settings-btn" id="settingsBtn" onclick="toggleSettings()" title="Settings">⚙</button>
@@ -851,6 +871,78 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('addVaultModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveVaultDoc()">Add to Vault</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- PROJECT CHAT — AI new project planner -->
+<div class="modal-overlay" id="projectChatModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">💬 Plan a New Project</div>
+        <div class="modal-sub" id="pchatSub">Chat with Groq about your idea — then create it in one shot</div>
+      </div>
+      <button class="modal-close" onclick="closeProjectChat()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- step indicator -->
+      <div style="display:flex;gap:0;margin-bottom:12px;align-items:center">
+        <div class="pchat-step">
+          <div class="pchat-step-dot done" id="pcs1">1</div>
+          <span>Describe your project</span>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin:0 8px"></div>
+        <div class="pchat-step">
+          <div class="pchat-step-dot" id="pcs2">2</div>
+          <span>Groq structures it</span>
+        </div>
+        <div style="flex:1;height:1px;background:var(--border);margin:0 8px"></div>
+        <div class="pchat-step">
+          <div class="pchat-step-dot" id="pcs3">3</div>
+          <span>Review &amp; create</span>
+        </div>
+      </div>
+
+      <!-- chat area -->
+      <div class="pchat-area" id="pchatArea">
+        <div class="chat-msg system">Tell me about your next project. What are you building, fixing, or restoring? Include as much detail as you have — parts needed, symptoms, goals, tools, budget. The more you share, the better I can structure it.</div>
+      </div>
+      <div class="chat-send-row">
+        <input class="chat-input" id="pchatInput"
+               placeholder="Describe your project idea…"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();pchatSend()}">
+        <button class="btn btn-teal" id="pchatSendBtn" onclick="pchatSend()">Send</button>
+      </div>
+
+      <!-- extract button — shown after first AI reply -->
+      <div id="pchatExtractRow" style="display:none;margin-top:10px">
+        <div style="display:flex;gap:8px;align-items:center;padding:12px 14px;background:linear-gradient(135deg,rgba(201,162,39,.05),rgba(45,212,191,.05));border:1px solid rgba(201,162,39,.15);border-radius:var(--r-sm)">
+          <div style="flex:1;font-size:12px;color:var(--text-muted)">Ready to structure this into a project? Groq will extract all details automatically.</div>
+          <button class="btn btn-primary btn-sm" id="pchatExtractBtn" onclick="pchatExtract()">⚒ Structure Project</button>
+        </div>
+      </div>
+
+      <!-- preview panel — shown after extraction -->
+      <div class="pchat-preview" id="pchatPreview">
+        <div class="pchat-preview-title">
+          <span>📋 Project Preview</span>
+          <span id="pchatPreviewCount"></span>
+        </div>
+        <div class="pchat-field"><span class="pchat-field-label">Title</span><span class="pchat-field-value" id="ppf-title"></span></div>
+        <div class="pchat-field"><span class="pchat-field-label">Category</span><span class="pchat-field-value" id="ppf-cat"></span></div>
+        <div class="pchat-field"><span class="pchat-field-label">Status</span><span class="pchat-field-value" id="ppf-status"></span></div>
+        <div class="pchat-field"><span class="pchat-field-label">Stage</span><span class="pchat-field-value muted" id="ppf-stage"></span></div>
+        <div class="pchat-field"><span class="pchat-field-label">Log entries</span><span class="pchat-field-value muted" id="ppf-logs"></span></div>
+        <div class="pchat-field"><span class="pchat-field-label">BOM items</span><span class="pchat-field-value muted" id="ppf-bom"></span></div>
+        <div class="pchat-actions">
+          <button class="btn btn-ghost btn-sm" onclick="pchatReExtract()">↺ Re-structure</button>
+          <button class="btn btn-primary" id="pchatCreateBtn" onclick="pchatCreate()">＋ Create Project</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1682,6 +1774,196 @@ async function forgeToLog(){
     closeModal('brainstormModal'); renderProjects(); toast('Forged to log.','success');
   }catch(e){toast('Forge error: '+e.message.slice(0,80),'error');}
   btn.disabled=false; btn.textContent='⚒ Forge to Log';
+}
+
+
+// ═══════════════════════════════════════════════════════
+// PROJECT CHAT — AI new project planner
+// ═══════════════════════════════════════════════════════
+let pchatHist     = [];   // [{role,content}]
+let pchatParsed   = null; // last extracted project object
+
+function openProjectChat() {
+  pchatHist   = [];
+  pchatParsed = null;
+  const area = document.getElementById('pchatArea');
+  area.innerHTML = '<div class="chat-msg system">Tell me about your next project. What are you building, fixing, or restoring? Include as much detail as you have — parts needed, symptoms, goals, tools, budget. The more you share, the better I can structure it.</div>';
+  document.getElementById('pchatInput').value        = '';
+  document.getElementById('pchatExtractRow').style.display = 'none';
+  document.getElementById('pchatSendBtn').disabled   = false;
+  document.getElementById('pchatSendBtn').textContent = 'Send';
+  document.getElementById('pchatPreview').classList.remove('show');
+  // reset step dots
+  ['pcs1','pcs2','pcs3'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    el.className = 'pchat-step-dot' + (i===0?' active':'');
+  });
+  openModal('projectChatModal');
+  setTimeout(() => document.getElementById('pchatInput').focus(), 80);
+}
+
+function closeProjectChat() {
+  closeModal('projectChatModal');
+}
+
+function pchatAddBubble(role, text) {
+  const area = document.getElementById('pchatArea');
+  const div  = document.createElement('div');
+  div.className = 'chat-msg ' + (role==='user'?'user':role==='ai'?'ai':'system');
+  div.textContent = text;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+async function pchatSend() {
+  const input = document.getElementById('pchatInput');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  const key = db.settings.groqKey;
+  if (!key) { toast('Add your Groq API key in Settings first.','error'); return; }
+
+  input.value = '';
+  pchatAddBubble('user', msg);
+  pchatHist.push({ role:'user', content:msg });
+
+  const btn = document.getElementById('pchatSendBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  updateLight('busy', 'Thinking…');
+
+  const sys = 'You are an expert project planning assistant helping someone plan a new project they want to track in LazForge — a project management app for repairs, builds, restorations, and software projects. Ask clarifying questions to get more detail: what category (repair/build/restore/etc), what the goal is, what parts or tools might be needed, what stage they are at, any known costs. Be conversational, helpful, and concise. Encourage them to share anything they already know.';
+
+  try {
+    const reply = await callAI(msg, sys, pchatHist);
+    pchatHist.push({ role:'assistant', content:reply });
+    pchatAddBubble('ai', reply);
+    updateLight('ok', 'Groq ✓');
+
+    // Show extract button after first exchange
+    if (pchatHist.length >= 2) {
+      document.getElementById('pchatExtractRow').style.display = '';
+      document.getElementById('pcs2').className = 'pchat-step-dot active';
+    }
+  } catch(e) {
+    pchatAddBubble('system', '⚠ ' + e.message);
+    toast(e.message.slice(0,90), 'error');
+    updateLight('error', 'Error');
+  }
+
+  btn.disabled = false; btn.textContent = 'Send';
+}
+
+async function pchatExtract() {
+  if (!pchatHist.length) { toast('Chat first, then structure.','error'); return; }
+
+  const btn = document.getElementById('pchatExtractBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Structuring…';
+  updateLight('busy', 'Parsing…');
+
+  const chatText = pchatHist.map(m => (m.role==='user'?'User':'AI') + ': ' + m.content).join('\n\n');
+
+  const sys = 'You are a project data extraction assistant for LazForge. ' +
+    'Extract structured data and respond ONLY with valid JSON — no markdown, no backticks. ' +
+    'Schema: { "projectTitle":"string", "template":"REPAIR|RESTORE|BUILD|SOFTWARE|HARDWARE|OTHER", "customLabel":"string", "status":"Active|On Hold|Completed", "description":"string", "activeStage":"string", "tags":["string"], "forgeLog":[{"label":"string","summary":"string","content":"string"}], "bom":[{"item":"string","cost":0,"budget":0,"status":"Needed|Purchased","date":""}] } ' +
+    'Rules: infer template from context. One forgeLog entry per phase. Extract parts/prices into bom. Default status Active. Generate 3-5 lowercase tags. Set activeStage to first appropriate stage for the template.'
+
+  try {
+    const raw   = await callAI(chatText, sys, []);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    pchatParsed = JSON.parse(clean);
+
+    if (!pchatParsed.projectTitle) throw new Error('Could not extract a project title from the conversation.');
+
+    // Populate preview panel
+    const tpl = ['REPAIR','RESTORE','BUILD','SOFTWARE','HARDWARE','OTHER'].includes(pchatParsed.template)
+      ? pchatParsed.template : 'OTHER';
+    document.getElementById('ppf-title').textContent  = pchatParsed.projectTitle || '—';
+    document.getElementById('ppf-cat').textContent    = pchatParsed.customLabel || tpl;
+    document.getElementById('ppf-status').textContent = pchatParsed.status || 'Active';
+    document.getElementById('ppf-stage').textContent  = pchatParsed.activeStage || '—';
+    document.getElementById('ppf-logs').textContent   = (pchatParsed.forgeLog||[]).length + ' entries';
+    document.getElementById('ppf-bom').textContent    = (pchatParsed.bom||[]).length + ' items' +
+      ((pchatParsed.bom||[]).length ? ' · $' + (pchatParsed.bom||[]).reduce((s,b) => s+parseFloat(b.cost||0),0).toFixed(2) : '');
+    document.getElementById('pchatPreviewCount').textContent =
+      (pchatParsed.tags||[]).map(t => '#'+t).join(' ');
+
+    document.getElementById('pchatPreview').classList.add('show');
+    document.getElementById('pcs2').className = 'pchat-step-dot done';
+    document.getElementById('pcs3').className = 'pchat-step-dot active';
+
+    // Scroll to preview
+    document.getElementById('pchatPreview').scrollIntoView({ behavior:'smooth', block:'nearest' });
+    updateLight('ok', 'Groq ✓');
+
+  } catch(e) {
+    toast('Structure error: ' + e.message.slice(0,100), 'error');
+    updateLight('error', 'Error');
+  }
+
+  btn.disabled = false; btn.textContent = '⚒ Structure Project';
+}
+
+function pchatReExtract() {
+  document.getElementById('pchatPreview').classList.remove('show');
+  pchatParsed = null;
+  document.getElementById('pcs2').className = 'pchat-step-dot active';
+  document.getElementById('pcs3').className = 'pchat-step-dot';
+  pchatExtract();
+}
+
+function pchatCreate() {
+  if (!pchatParsed) { toast('Structure the project first.','error'); return; }
+
+  const tpl = ['REPAIR','RESTORE','BUILD','SOFTWARE','HARDWARE','OTHER'].includes(pchatParsed.template)
+    ? pchatParsed.template : 'OTHER';
+
+  const p = {
+    projectId:    uuid(),
+    projectTitle: pchatParsed.projectTitle || 'New Project',
+    template:     tpl,
+    customLabel:  pchatParsed.customLabel || '',
+    status:       ['Active','On Hold','Completed'].includes(pchatParsed.status) ? pchatParsed.status : 'Active',
+    activeStage:  pchatParsed.activeStage || (STAGES[tpl]||STAGES.OTHER)[0],
+    lastActive:   new Date().toISOString(),
+    vaultLinks:   [],
+    tags:         (pchatParsed.tags||[]).map(t => String(t).toLowerCase().replace(/[^a-z0-9\-_]/g,'')).filter(Boolean).slice(0,10),
+    scratch:      '',
+    bom:          (pchatParsed.bom||[]).map(b => ({
+      item:   b.item   || '',
+      cost:   parseFloat(b.cost)   || 0,
+      budget: parseFloat(b.budget) || 0,
+      status: b.status==='Purchased' ? 'Purchased' : 'Needed',
+      date:   b.date   || ''
+    })),
+    forgeLog: []
+  };
+
+  // Description as first log entry
+  if (pchatParsed.description) {
+    p.forgeLog.push({ logId:uuid(), timestamp:new Date().toISOString(), type:'MANUAL_LOG',
+      label:'Overview', summary:'Project Description', content:pchatParsed.description });
+  }
+
+  // Remaining log entries
+  (pchatParsed.forgeLog||[]).forEach(l => {
+    p.forgeLog.push({ logId:uuid(), timestamp:new Date().toISOString(), type:'AI_EXPORT',
+      label:l.label||'', summary:l.summary||'AI Planning Note', content:l.content||'' });
+  });
+
+  // Store the full chat as a brainstorm log entry too
+  if (pchatHist.length) {
+    const chatText = pchatHist.map(m => (m.role==='user'?'You':'Groq') + ': ' + m.content).join('\n\n');
+    p.forgeLog.push({ logId:uuid(), timestamp:new Date().toISOString(), type:'AI_EXPORT',
+      label:'Brainstorming', summary:'Full Planning Chat', content:chatText });
+  }
+
+  db.projects.unshift(p);
+  saveDB();
+  closeModal('projectChatModal');
+  expandedCards[p.projectId] = 'log';
+  renderProjects();
+  document.getElementById('pcs3').className = 'pchat-step-dot done';
+  toast('"' + p.projectTitle + '" created — ' + p.forgeLog.length + ' log entries, ' + p.bom.length + ' BOM items.', 'success');
 }
 
 // ═══════════════════════════════════════════════════════
