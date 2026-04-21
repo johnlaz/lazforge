@@ -346,6 +346,18 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
 .pchat-step-dot.done{background:var(--teal-dim);border-color:var(--teal-border);color:var(--teal)}
 .pchat-step-dot.active{background:var(--gold-dim);border-color:rgba(201,162,39,.4);color:var(--gold)}
 
+
+/* SCAN TABS */
+.scan-tab-wrap{display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px}
+.scan-tab{flex:1;padding:8px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .18s;font-family:var(--font-b);background:var(--surface2);color:var(--text-muted)}
+.scan-tab:last-child{border-left:1px solid var(--border)}
+.scan-tab.active{background:var(--gold-dim);color:var(--gold)}
+.scan-paste-area{width:100%;min-height:130px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--font-b);font-size:13px;line-height:1.6;resize:vertical;transition:border-color .2s}
+.scan-paste-area:focus{outline:none;border-color:var(--gold)}
+.scan-paste-area::placeholder{color:var(--text-muted)}
+.scan-paste-status{font-size:11px;color:var(--text-muted);margin-top:6px;font-family:monospace;min-height:16px}
+.scan-paste-status.ready{color:var(--green)}
+
 /* TOAST */
 .toast-wrap{position:fixed;bottom:1.75rem;right:1.75rem;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);animation:toastIn .25s ease;min-width:220px}
@@ -756,15 +768,9 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
       <div class="scan-divider"><span>2. Provide AI response</span></div>
 
       <!-- Tab toggle: Upload vs Paste -->
-      <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden">
-        <button id="scanTabUpload" onclick="setScanTab('upload')"
-          style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .18s;background:var(--gold-dim);color:var(--gold)">
-          📄 Upload File
-        </button>
-        <button id="scanTabPaste" onclick="setScanTab('paste')"
-          style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .18s;background:var(--surface2);color:var(--text-muted);border-left:1px solid var(--border)">
-          📋 Paste Text
-        </button>
+      <div class="scan-tab-wrap">
+        <button id="scanTabUpload" class="scan-tab active" onclick="setScanTab('upload')">📄 Upload File</button>
+        <button id="scanTabPaste"  class="scan-tab"        onclick="setScanTab('paste')">📋 Paste Text</button>
       </div>
 
       <!-- Upload panel -->
@@ -779,11 +785,10 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
 
       <!-- Paste panel -->
       <div id="scanPanelPaste" style="display:none">
-        <textarea id="scanPasteArea"
-          style="width:100%;min-height:130px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--font-b);font-size:13px;line-height:1.6;resize:vertical;transition:border-color .2s"
+        <textarea id="scanPasteArea" class="scan-paste-area"
           placeholder="Paste your AI response here…"
           oninput="handleScanPaste(this)"></textarea>
-        <div class="scan-status" id="scanPasteStatus" style="margin-top:6px">Ready to paste</div>
+        <div class="scan-paste-status" id="scanPasteStatus">Ready to paste</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1507,7 +1512,7 @@ function openNewProject() {
   const pasteArea = document.getElementById('scanPasteArea');
   if (pasteArea) { pasteArea.value = ''; }
   const pasteStatus = document.getElementById('scanPasteStatus');
-  if (pasteStatus) { pasteStatus.textContent = 'Ready to paste'; pasteStatus.style.color = ''; }
+  if (pasteStatus) { pasteStatus.textContent = 'Ready to paste'; pasteStatus.classList.remove('ready'); }
   // Default to upload tab
   setScanTab('upload');
   openModal('newProjectModal');
@@ -2122,28 +2127,26 @@ function setScanTab(tab) {
   // Toggle panels
   document.getElementById('scanPanelUpload').style.display = isUpload ? '' : 'none';
   document.getElementById('scanPanelPaste').style.display  = isUpload ? 'none' : '';
-  // Style tabs
-  const tabU = document.getElementById('scanTabUpload');
-  const tabP = document.getElementById('scanTabPaste');
-  tabU.style.background = isUpload ? 'var(--gold-dim)' : 'var(--surface2)';
-  tabU.style.color      = isUpload ? 'var(--gold)'    : 'var(--text-muted)';
-  tabP.style.background = isUpload ? 'var(--surface2)' : 'var(--gold-dim)';
-  tabP.style.color      = isUpload ? 'var(--text-muted)' : 'var(--gold)';
-  // If switching to paste and there is already text, re-validate
+  // Toggle active class on tabs
+  document.getElementById('scanTabUpload').classList.toggle('active', isUpload);
+  document.getElementById('scanTabPaste').classList.toggle('active', !isUpload);
+  // If switching to paste, re-validate any existing text and focus
   if (!isUpload) {
     const ta = document.getElementById('scanPasteArea');
     if (ta && ta.value.trim()) handleScanPaste(ta);
     setTimeout(() => { if (ta) ta.focus(); }, 80);
   }
-  // Clear state from the other tab
+  // Clear the inactive tab state
   if (isUpload) {
     scannedFileText = '';
     const ps = document.getElementById('scanPasteStatus');
-    if (ps) ps.textContent = 'Ready to paste';
+    if (ps) { ps.textContent = 'Ready to paste'; ps.classList.remove('ready'); }
     document.getElementById('scanImportBtn').style.display = 'none';
   } else {
     const ss = document.getElementById('scanStatus');
     if (ss) ss.textContent = 'No file selected';
+    scannedFileText = '';
+    document.getElementById('scanImportBtn').style.display = 'none';
   }
 }
 
@@ -2153,12 +2156,13 @@ function handleScanPaste(ta) {
   if (!text) {
     scannedFileText = '';
     status.textContent = 'Ready to paste';
+    status.classList.remove('ready');
     document.getElementById('scanImportBtn').style.display = 'none';
     return;
   }
   scannedFileText = text;
-  status.textContent = '✓ ' + text.length + ' characters ready';
-  status.style.color = 'var(--green)';
+  status.textContent = '✓ ' + text.length.toLocaleString() + ' characters — ready to parse';
+  status.classList.add('ready');
   document.getElementById('scanImportBtn').style.display = '';
 }
 
