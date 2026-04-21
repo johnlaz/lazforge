@@ -753,12 +753,37 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
         <button class="btn btn-ghost btn-xs" onclick="copyProjectPrompt()" id="copyPromptBtn">📋 Copy Prompt</button>
       </div>
       <div class="prompt-box" id="projectPromptBox">Paste your conversation or notes after this instruction: "Convert the following project notes into a LazForge import report. Respond in plain text with these exact sections: PROJECT TITLE: [title] | CATEGORY: [REPAIR/RESTORE/BUILD/SOFTWARE/HARDWARE/OTHER] | STATUS: [Active/On Hold/Completed] | DESCRIPTION: [overview] | LOG ENTRIES: [STAGE] | [SUMMARY TITLE] / [content] / --- (repeat) | BOM ITEMS: [item] | $[cost] | [Needed or Purchased] | NEXT STEPS: [bullets]"</div>
-      <div class="scan-divider"><span>2. Upload AI response file</span></div>
-      <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
-        <div class="scan-drop-icon">📄</div>
-        <div class="scan-drop-label">Drop .txt or .md file, or <strong>click to browse</strong></div>
-        <div class="scan-status" id="scanStatus">No file selected</div>
-        <input type="file" id="scanFileInput" accept=".txt,.md,.text" onchange="handleScanFile(event)">
+      <div class="scan-divider"><span>2. Provide AI response</span></div>
+
+      <!-- Tab toggle: Upload vs Paste -->
+      <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden">
+        <button id="scanTabUpload" onclick="setScanTab('upload')"
+          style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .18s;background:var(--gold-dim);color:var(--gold)">
+          📄 Upload File
+        </button>
+        <button id="scanTabPaste" onclick="setScanTab('paste')"
+          style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .18s;background:var(--surface2);color:var(--text-muted);border-left:1px solid var(--border)">
+          📋 Paste Text
+        </button>
+      </div>
+
+      <!-- Upload panel -->
+      <div id="scanPanelUpload">
+        <div class="scan-drop" id="scanDrop" onclick="document.getElementById('scanFileInput').click()">
+          <div class="scan-drop-icon">📄</div>
+          <div class="scan-drop-label">Drop .txt or .md file, or <strong>click to browse</strong></div>
+          <div class="scan-status" id="scanStatus">No file selected</div>
+          <input type="file" id="scanFileInput" accept=".txt,.md,.text" onchange="handleScanFile(event)">
+        </div>
+      </div>
+
+      <!-- Paste panel -->
+      <div id="scanPanelPaste" style="display:none">
+        <textarea id="scanPasteArea"
+          style="width:100%;min-height:130px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--font-b);font-size:13px;line-height:1.6;resize:vertical;transition:border-color .2s"
+          placeholder="Paste your AI response here…"
+          oninput="handleScanPaste(this)"></textarea>
+        <div class="scan-status" id="scanPasteStatus" style="margin-top:6px">Ready to paste</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1478,6 +1503,13 @@ function openNewProject() {
   scannedFileText = '';
   document.getElementById('scanStatus').textContent = 'No file selected';
   document.getElementById('scanImportBtn').style.display = 'none';
+  // Reset paste area
+  const pasteArea = document.getElementById('scanPasteArea');
+  if (pasteArea) { pasteArea.value = ''; }
+  const pasteStatus = document.getElementById('scanPasteStatus');
+  if (pasteStatus) { pasteStatus.textContent = 'Ready to paste'; pasteStatus.style.color = ''; }
+  // Default to upload tab
+  setScanTab('upload');
   openModal('newProjectModal');
   setTimeout(() => document.getElementById('np_title').focus(), 80);
 }
@@ -2083,6 +2115,51 @@ function handleScanFile(e) {
   };
   reader.readAsText(file);
   e.target.value = '';
+}
+
+function setScanTab(tab) {
+  const isUpload = tab === 'upload';
+  // Toggle panels
+  document.getElementById('scanPanelUpload').style.display = isUpload ? '' : 'none';
+  document.getElementById('scanPanelPaste').style.display  = isUpload ? 'none' : '';
+  // Style tabs
+  const tabU = document.getElementById('scanTabUpload');
+  const tabP = document.getElementById('scanTabPaste');
+  tabU.style.background = isUpload ? 'var(--gold-dim)' : 'var(--surface2)';
+  tabU.style.color      = isUpload ? 'var(--gold)'    : 'var(--text-muted)';
+  tabP.style.background = isUpload ? 'var(--surface2)' : 'var(--gold-dim)';
+  tabP.style.color      = isUpload ? 'var(--text-muted)' : 'var(--gold)';
+  // If switching to paste and there is already text, re-validate
+  if (!isUpload) {
+    const ta = document.getElementById('scanPasteArea');
+    if (ta && ta.value.trim()) handleScanPaste(ta);
+    setTimeout(() => { if (ta) ta.focus(); }, 80);
+  }
+  // Clear state from the other tab
+  if (isUpload) {
+    scannedFileText = '';
+    const ps = document.getElementById('scanPasteStatus');
+    if (ps) ps.textContent = 'Ready to paste';
+    document.getElementById('scanImportBtn').style.display = 'none';
+  } else {
+    const ss = document.getElementById('scanStatus');
+    if (ss) ss.textContent = 'No file selected';
+  }
+}
+
+function handleScanPaste(ta) {
+  const text = ta.value.trim();
+  const status = document.getElementById('scanPasteStatus');
+  if (!text) {
+    scannedFileText = '';
+    status.textContent = 'Ready to paste';
+    document.getElementById('scanImportBtn').style.display = 'none';
+    return;
+  }
+  scannedFileText = text;
+  status.textContent = '✓ ' + text.length + ' characters ready';
+  status.style.color = 'var(--green)';
+  document.getElementById('scanImportBtn').style.display = '';
 }
 
 // Drag and drop on scan zone
