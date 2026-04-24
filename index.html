@@ -1754,65 +1754,171 @@ function saveScratch(pid) {
 }
 
 // ═══════════════════════════════════════════════════════
-// BRAINSTORM
+// BRAINSTORM  — project-aware context injection
 // ═══════════════════════════════════════════════════════
-function openBrainstorm(pid) {
-  brainstormPid=pid; brainstormHist=[];
-  const chat=document.getElementById('chatArea');
-  chat.innerHTML='<div class="chat-msg system">Chat freely. Nothing saves until you hit Forge to Log.</div>';
-  const p=db.projects.find(x=>x.projectId===pid);
-  document.getElementById('brainstormSub').textContent=p?'Project: '+p.projectTitle:'Transient — save with Forge to Log';
+
+// Stored system prompt — built once per session, reused every send
+let brainstormSys = '';
+
+function buildProjectBriefing(p) {
+  if (!p) return 'You are a concise technical project assistant. Be direct and practical.';
+  const n = '\n';
+  const logSummary = p.forgeLog.length
+    ? p.forgeLog.slice(0, 8).map(l =>
+        '  [' + (l.label||'Note') + '] ' + (l.summary||'') +
+        (l.content ? ': ' + l.content.slice(0, 200) + (l.content.length > 200 ? '...' : '') : '')
+      ).join(n)
+    : '  No log entries yet.';
+  const bomSummary = p.bom.length
+    ? p.bom.map(b => '  - ' + b.item + ' $' + parseFloat(b.cost||0).toFixed(2) + ' [' + b.status + ']').join(n)
+    : '  No BOM items.';
+  const vaultSummary = p.vaultLinks.length
+    ? p.vaultLinks.map(v => '  - ' + v.name).join(n)
+    : '  None.';
+  const tagStr    = (p.tags||[]).join(', ') || 'none';
+  const scratchStr = p.scratch ? p.scratch.slice(0, 300) : 'empty';
+  return [
+    'You are a knowledgeable technical assistant continuing work on an existing project.',
+    'You have full context — treat it as shared working memory. Build on what has already been done.',
+    'Reference prior log entries and decisions when relevant. Be direct and practical.',
+    '',
+    '=== PROJECT BRIEFING ===',
+    'Title:    ' + p.projectTitle,
+    'Category: ' + (p.customLabel || p.template),
+    'Status:   ' + p.status,
+    'Stage:    ' + (p.activeStage || 'Not set'),
+    'Tags:     ' + tagStr,
+    '',
+    'FORGE LOG (' + p.forgeLog.length + ' entries, most recent ' + Math.min(p.forgeLog.length, 8) + '):',
+    logSummary,
+    '',
+    'BILL OF MATERIALS (' + p.bom.length + ' items):',
+    bomSummary,
+    '',
+    'VAULT DOCUMENTS:',
+    vaultSummary,
+    '',
+    'SCRATCH PAD: ' + scratchStr,
+    '=== END BRIEFING ===',
+    '',
+    'Open with a brief 2-3 sentence greeting that acknowledges where this project stands',
+    'based on the briefing above, then ask what the user wants to work on next.'
+  ].join(n);
+}
+
+async function openBrainstorm(pid) {
+  brainstormPid = pid;
+  brainstormHist = [];
+  brainstormSys = '';
+  const chat = document.getElementById('chatArea');
+  const p    = db.projects.find(x => x.projectId === pid);
+
+  chat.innerHTML = '';
+  document.getElementById('chatInput').value   = '';
+  document.getElementById('sendBtn').disabled  = true;
+  document.getElementById('forgeBtn').disabled = true;
+  document.getElementById('brainstormSub').textContent = p ? p.projectTitle + ' — loading context...' : 'New session';
   openModal('brainstormModal');
-  setTimeout(()=>document.getElementById('chatInput').focus(),80);
-}
 
-function addBubble(role,text){
-  const chat=document.getElementById('chatArea');
-  const div=document.createElement('div');
-  div.className='chat-msg '+(role==='user'?'user':role==='ai'?'ai':'system');
-  div.textContent=text;
-  chat.appendChild(div); chat.scrollTop=chat.scrollHeight;
-}
+  // Loading bubble
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'chat-msg system';
+  loadingDiv.innerHTML = '<span class="spinner"></span> Reviewing project...';
+  chat.appendChild(loadingDiv);
 
-async function sendMessage(){
-  const input=document.getElementById('chatInput');
-  const msg=input.value.trim(); if(!msg)return;
-  input.value=''; addBubble('user',msg);
-  const btn=document.getElementById('sendBtn');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
-  const p=db.projects.find(x=>x.projectId===brainstormPid);
-  const sys=p?'You are a concise technical assistant for a '+(p.customLabel||p.template)+' project titled "'+p.projectTitle+'". Current stage: '+(p.activeStage||'N/A')+'. Be direct and practical.':'You are a concise technical project assistant.';
-  try{
-    const reply=await callAI(msg,sys,brainstormHist);
-    brainstormHist.push({role:'user',content:msg},{role:'assistant',content:reply});
-    addBubble('ai',reply); updateLight('ok','Groq ✓');
-  }catch(e){
-    addBubble('system','⚠ '+e.message);
-    toast(e.message.slice(0,90),'error');
-    updateLight('error','Error');
+  brainstormSys = buildProjectBriefing(p);
+
+  if (!db.settings.groqKey) {
+    loadingDiv.textContent = 'Add a Groq API key in Settings to enable AI context loading.';
+    document.getElementById('sendBtn').disabled  = false;
+    document.getElementById('forgeBtn').disabled = false;
+    document.getElementById('brainstormSub').textContent = p ? p.projectTitle : 'Brainstorm';
+    setTimeout(() => document.getElementById('chatInput').focus(), 80);
+    return;
   }
-  btn.disabled=false; btn.textContent='Send';
+
+  updateLight('busy', 'Loading...');
+  try {
+    const opening = await callAI('Begin.', brainstormSys, []);
+    loadingDiv.remove();
+    brainstormHist.push({ role:'user', content:'Begin.' });
+    brainstormHist.push({ role:'assistant', content:opening });
+    addBubble('ai', opening);
+    updateLight('ok', 'Groq ✓');
+    document.getElementById('brainstormSub').textContent = p ? p.projectTitle + ' · Project-aware' : 'Brainstorm';
+  } catch(e) {
+    loadingDiv.textContent = '⚠ Could not load context: ' + e.message.slice(0,80) + ' — you can still chat manually.';
+    updateLight('error', 'Error');
+    document.getElementById('brainstormSub').textContent = p ? p.projectTitle : 'Brainstorm';
+  }
+
+  document.getElementById('sendBtn').disabled  = false;
+  document.getElementById('forgeBtn').disabled = false;
+  setTimeout(() => document.getElementById('chatInput').focus(), 80);
 }
 
-async function forgeToLog(){
-  if(!brainstormHist.length){toast('No conversation to forge yet.','error');return;}
-  const btn=document.getElementById('forgeBtn');
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Forging…';
-  const p=db.projects.find(x=>x.projectId===brainstormPid);
-  const chatText=brainstormHist.map(m=>(m.role==='user'?'User':'AI')+': '+m.content).join('\n\n');
-  const prompt='Summarize this brainstorming conversation into a clean structured log entry for a project called "'+(p?p.projectTitle:'Unknown')+'". Use ## headings. Be concise and factual. Plain text only.\n\nCONVERSATION:\n'+chatText;
-  try{
-    const summary=await callAI(prompt,null,[]);
-    if(p){
-      p.forgeLog.unshift({logId:uuid(),timestamp:new Date().toISOString(),type:'AI_EXPORT',
-        label:p.activeStage||'Brainstorm',summary:'AI Brainstorm Distillation',content:summary});
-      p.lastActive=new Date().toISOString(); saveDB();
+function addBubble(role, text) {
+  const chat = document.getElementById('chatArea');
+  const div  = document.createElement('div');
+  div.className = 'chat-msg ' + (role==='user'?'user':role==='ai'?'ai':'system');
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const msg   = input.value.trim(); if (!msg) return;
+  input.value = ''; addBubble('user', msg);
+  const btn   = document.getElementById('sendBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const reply = await callAI(msg, brainstormSys, brainstormHist);
+    brainstormHist.push({ role:'user', content:msg }, { role:'assistant', content:reply });
+    addBubble('ai', reply);
+    updateLight('ok', 'Groq ✓');
+  } catch(e) {
+    addBubble('system', '⚠ ' + e.message);
+    toast(e.message.slice(0,90), 'error');
+    updateLight('error', 'Error');
+  }
+  btn.disabled = false; btn.textContent = 'Send';
+}
+
+async function forgeToLog() {
+  // Skip the priming exchange ('Begin.' + opening) — only forge real user messages
+  const realHist = brainstormHist.slice(2);
+  if (!realHist.length) { toast('Have a conversation first, then forge.', 'error'); return; }
+
+  const btn = document.getElementById('forgeBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Forging...';
+  const p = db.projects.find(x => x.projectId === brainstormPid);
+  const chatText = realHist.map(m => (m.role==='user'?'User':'AI') + ': ' + m.content).join('\n\n');
+  const prompt = 'Summarize this project work session into a clean structured log entry for "' +
+    (p ? p.projectTitle : 'Unknown') + '". Use ## headings for distinct topics. Concise, factual, plain text only.\n\nSESSION:\n' + chatText;
+
+  try {
+    const summary = await callAI(prompt, null, []);
+    if (p) {
+      p.forgeLog.unshift({
+        logId:     uuid(),
+        timestamp: new Date().toISOString(),
+        type:      'AI_EXPORT',
+        label:     p.activeStage || 'Brainstorm',
+        summary:   'AI Work Session — ' + new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'}),
+        content:   summary
+      });
+      p.lastActive = new Date().toISOString();
+      saveDB();
     }
-    closeModal('brainstormModal'); renderProjects(); toast('Forged to log.','success');
-  }catch(e){toast('Forge error: '+e.message.slice(0,80),'error');}
-  btn.disabled=false; btn.textContent='⚒ Forge to Log';
+    closeModal('brainstormModal');
+    renderProjects();
+    toast('Session forged to log.', 'success');
+  } catch(e) {
+    toast('Forge error: ' + e.message.slice(0,80), 'error');
+  }
+  btn.disabled = false; btn.textContent = '⧒ Forge to Log';
 }
-
 
 // ═══════════════════════════════════════════════════════
 // PROJECT CHAT — AI new project planner
