@@ -232,6 +232,18 @@ body{font-family:var(--font-b);background:var(--bg);color:var(--text);min-height
 .scratch-saved{font-size:11px;color:var(--green);opacity:0;transition:opacity .3s}
 .scratch-saved.show{opacity:1}
 
+/* PROJECT IMAGE */
+.proj-img-wrap{position:relative;margin-bottom:14px}
+.proj-img-preview{width:100%;max-height:220px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--border);display:block}
+.proj-img-drop{border:2px dashed var(--border);border-radius:var(--r-sm);padding:22px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);position:relative}
+.proj-img-drop:hover,.proj-img-drop.drag-over{border-color:var(--gold);background:var(--gold-dim)}
+.proj-img-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.proj-img-drop-icon{font-size:26px;margin-bottom:6px}
+.proj-img-drop-label{font-size:13px;color:var(--text-muted)}
+.proj-img-drop-label strong{color:var(--gold)}
+.proj-img-actions{display:flex;gap:8px;margin-top:8px;align-items:center}
+.proj-img-name{font-size:11px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* EMPTY STATE */
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--text-muted);font-size:13px}
 .empty-icon{font-size:32px;margin-bottom:10px}
@@ -1325,6 +1337,7 @@ function renderCardBody(p, activeTab, invested) {
     '<button class="card-tab'+t('vault')+'" onclick="event.stopPropagation();switchTab(\''+p.projectId+'\',\'vault\')">Vault</button>'+
     '<button class="card-tab'+t('stages')+'" onclick="event.stopPropagation();switchTab(\''+p.projectId+'\',\'stages\')">Stages</button>'+
     '<button class="card-tab'+t('notes')+'" onclick="event.stopPropagation();switchTab(\''+p.projectId+'\',\'notes\')">📝 Notes</button>'+
+    '<button class="card-tab'+t('image')+'" onclick="event.stopPropagation();switchTab(\''+p.projectId+'\',\'image\')">🖼 Image</button>'+
     '<button class="card-tab tab-teal" style="margin-left:auto" onclick="event.stopPropagation();openBrainstorm(\''+p.projectId+'\')">💡 Brainstorm</button>'+
     '<button class="card-tab" onclick="event.stopPropagation();openCompile(\''+p.projectId+'\')" style="color:var(--purple)">🤖 AI Summary</button>'+
     '<button class="card-tab" onclick="event.stopPropagation();openEditProject(\''+p.projectId+'\')" style="color:var(--text-muted)">✎ Edit</button>'+
@@ -1334,6 +1347,7 @@ function renderCardBody(p, activeTab, invested) {
     renderPanelVault(p, activeTab)+
     renderPanelStages(p, activeTab)+
     renderPanelNotes(p, activeTab)+
+    renderPanelImage(p, activeTab)+
     '</div>';
 }
 
@@ -1455,6 +1469,69 @@ function renderPanelNotes(p, activeTab) {
     '</div></div></div>';
 }
 
+function renderPanelImage(p, activeTab) {
+  const active = activeTab==='image';
+  const hasImg = !!(p.projectImage);
+  const imgSection = hasImg
+    ? '<div class="proj-img-wrap">'+
+        '<img class="proj-img-preview" src="'+p.projectImage+'" alt="Project image">'+
+        '<div class="proj-img-actions">'+
+        '<span class="proj-img-name">'+esc(p.projectImageName||'project-image')+'</span>'+
+        '<button class="btn btn-danger btn-sm" onclick="removeProjectImage(\''+p.projectId+'\')">🗑 Remove</button>'+
+        '</div></div>'
+    : '';
+  return '<div class="card-panel'+(active?' active':'')+'" id="pan-image-'+p.projectId+'">'+
+    '<div class="form-group">'+
+    '<label class="form-label">Project Photo / Reference Image</label>'+
+    '<div class="form-hint" style="margin-bottom:10px">Image is stored with the project and included in exports &amp; print reports.</div>'+
+    imgSection+
+    '<div class="proj-img-drop" id="imgdrop-'+p.projectId+'" '+
+      'ondragover="event.preventDefault();this.classList.add(\'drag-over\')" '+
+      'ondragleave="this.classList.remove(\'drag-over\')" '+
+      'ondrop="handleImgDrop(event,\''+p.projectId+'\')">'+
+    '<input type="file" accept="image/*" onchange="handleImgFile(event,\''+p.projectId+'\')" onclick="event.stopPropagation()">'+
+    '<div class="proj-img-drop-icon">🖼</div>'+
+    '<div class="proj-img-drop-label">'+(hasImg?'<strong>Replace image</strong> — drag or click':'<strong>Upload image</strong> — drag or click')+'</div>'+
+    '<div class="proj-img-drop-label" style="font-size:11px;margin-top:4px">JPG, PNG, WebP, GIF — stored as base64 in your project data</div>'+
+    '</div></div></div>';
+}
+
+function handleImgFile(e, pid) {
+  const file = e.target.files[0]; if (!file) return;
+  loadProjectImage(file, pid);
+  e.target.value = '';
+}
+
+function handleImgDrop(e, pid) {
+  e.preventDefault();
+  const drop = document.getElementById('imgdrop-'+pid);
+  if (drop) drop.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0]; if (!file||!file.type.startsWith('image/')) return;
+  loadProjectImage(file, pid);
+}
+
+function loadProjectImage(file, pid) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const p = db.projects.find(x => x.projectId===pid); if (!p) return;
+    p.projectImage = ev.target.result;
+    p.projectImageName = file.name;
+    p.lastActive = new Date().toISOString();
+    saveDB(); renderProjects();
+    if (expandedCards[pid]) expandedCards[pid] = 'image';
+    renderProjects();
+    toast('Image saved to project.','success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeProjectImage(pid) {
+  const p = db.projects.find(x => x.projectId===pid); if (!p) return;
+  if (!confirm('Remove project image?')) return;
+  delete p.projectImage; delete p.projectImageName;
+  saveDB(); renderProjects(); toast('Image removed.','info');
+}
+
 // ═══════════════════════════════════════════════════════
 // OVERLAY (compact grid click)
 // ═══════════════════════════════════════════════════════
@@ -1491,9 +1568,9 @@ function switchTab(pid, tab) {
   const card = document.getElementById('pc-'+pid);
   if (!card) return;
   card.querySelectorAll('.card-panel').forEach(el => el.classList.remove('active'));
-  const panId = { log:'pan-log', bom:'pan-bom', vault:'pan-vault', stages:'pan-stages', notes:'pan-notes' }[tab];
+  const panId = { log:'pan-log', bom:'pan-bom', vault:'pan-vault', stages:'pan-stages', notes:'pan-notes', image:'pan-image' }[tab];
   if (panId) card.querySelector('#'+panId+'-'+pid)?.classList.add('active');
-  const tabLabels = { log:'Forge Log', bom:'Bill of Materials', vault:'Vault', stages:'Stages', notes:'📝 Notes' };
+  const tabLabels = { log:'Forge Log', bom:'Bill of Materials', vault:'Vault', stages:'Stages', notes:'📝 Notes', image:'🖼 Image' };
   card.querySelectorAll('.card-tab').forEach(t => t.classList.toggle('active', t.textContent.trim()===tabLabels[tab]));
 }
 
@@ -2151,11 +2228,259 @@ function printCompile(){
   const text=document.getElementById('compileOutput').textContent;
   if(!text||text.startsWith('Hit "Generate"')){toast('Generate the summary first.','error');return;}
   const p=db.projects.find(x=>x.projectId===compilePid);
+  if(!p)return;
+
+  // Parse the AI summary into sections
+  const lines = text.split('\n');
+  let sectionsHtml = '';
+  let currentSection = '';
+  let currentContent = [];
+
+  function flushSection() {
+    if (!currentSection) { currentContent=[]; return; }
+    const contentText = currentContent.join('\n').trim();
+    const contentHtml = contentText.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+        return '<li>'+trimmed.replace(/^[-•]\s*/,'')+'</li>';
+      }
+      return '<p>'+trimmed+'</p>';
+    }).join('');
+    // Wrap consecutive li elements
+    const wrappedHtml = contentHtml.replace(/(<li>.*?<\/li>)+/gs, m => '<ul>'+m+'</ul>');
+    sectionsHtml += '<div class="rpt-section"><h2 class="rpt-section-title">'+currentSection+'</h2><div class="rpt-section-body">'+wrappedHtml+'</div></div>';
+    currentContent = [];
+  }
+
+  lines.forEach(line => {
+    if (line.startsWith('## ')) {
+      flushSection();
+      currentSection = line.replace(/^##\s*/,'');
+    } else if (line.startsWith('# ')) {
+      flushSection();
+      currentSection = line.replace(/^#\s*/,'');
+    } else {
+      currentContent.push(line);
+    }
+  });
+  flushSection();
+
+  // BOM table
+  const invested = p.bom.reduce((s,b)=>b.status==='Purchased'?s+parseFloat(b.cost||0):s,0);
+  const budgeted = p.bom.reduce((s,b)=>s+parseFloat(b.budget||0),0);
+  const variance = invested - budgeted;
+  const bomRows = p.bom.map(b=>`<tr>
+    <td>${b.item}</td>
+    <td>$${parseFloat(b.cost||0).toFixed(2)}</td>
+    <td>$${parseFloat(b.budget||0).toFixed(2)}</td>
+    <td><span class="bom-pill ${b.status==='Purchased'?'pill-purchased':'pill-needed'}">${b.status}</span></td>
+    <td>${b.date||'—'}</td>
+  </tr>`).join('');
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  const imgHtml = p.projectImage
+    ? `<div class="rpt-image-wrap"><img class="rpt-image" src="${p.projectImage}" alt="Project image"><div class="rpt-image-caption">${p.projectImageName||'Project Reference Photo'}</div></div>`
+    : '';
+
+  const tagHtml = (p.tags||[]).length
+    ? (p.tags||[]).map(t=>`<span class="rpt-tag">#${t}</span>`).join(' ')
+    : '<em>No tags</em>';
+
+  const stageColor = { Diagnostics:'#2563eb', Assessment:'#2563eb', Requirements:'#2563eb',
+    'Part Sourcing':'#d97706', Disassembly:'#d97706', 'CAD Design':'#d97706',
+    Implementation:'#7c3aed', Restoration:'#7c3aed', Prototype:'#7c3aed', Brainstorming:'#7c3aed',
+    Verification:'#059669', 'Final Build':'#059669', Completed:'#059669', Complete:'#059669'
+  }[p.activeStage] || '#6b7280';
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>LazForge Report — ${p.projectTitle}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Georgia',serif;background:#f8f7f4;color:#1a1a1a;font-size:14px;line-height:1.7}
+@page{margin:2cm 2cm 2.5cm;size:Letter}
+
+/* ── COVER / HEADER ── */
+.rpt-header{background:linear-gradient(135deg,#0c0f14 0%,#1a2232 100%);color:#fff;padding:40px 48px 32px;position:relative;overflow:hidden}
+.rpt-header::after{content:'';position:absolute;top:0;right:0;width:200px;height:100%;background:linear-gradient(135deg,rgba(201,162,39,.15),rgba(45,212,191,.08));pointer-events:none}
+.rpt-logo-row{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+.rpt-logo-mark{width:48px;height:48px;background:linear-gradient(135deg,#c9a227,#e8c060);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Georgia',serif;font-weight:700;font-size:24px;color:#0c0f14;flex-shrink:0}
+.rpt-logo-text{font-family:'Georgia',serif;font-size:20px;color:#e2e8f0;letter-spacing:.3px}
+.rpt-logo-sub{font-size:11px;color:#94a3b8;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px}
+.rpt-divider{height:1px;background:rgba(201,162,39,.35);margin:0 0 24px}
+.rpt-project-title{font-family:'Georgia',serif;font-size:28px;font-weight:700;color:#f1f5f9;line-height:1.25;margin-bottom:14px}
+.rpt-meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:4px}
+.rpt-meta-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 14px}
+.rpt-meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:3px}
+.rpt-meta-value{font-size:14px;font-weight:600;color:#e2e8f0}
+.rpt-stage-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:${stageColor};margin-right:6px;vertical-align:middle}
+.rpt-date-stamp{margin-top:20px;font-size:11px;color:#64748b;text-align:right;font-style:italic}
+
+/* ── BODY ── */
+.rpt-body{max-width:900px;margin:0 auto;padding:36px 48px 48px}
+
+/* ── PROJECT IMAGE ── */
+.rpt-image-wrap{margin:24px 0;text-align:center;break-inside:avoid}
+.rpt-image{max-width:100%;max-height:320px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+.rpt-image-caption{font-size:11px;color:#6b7280;margin-top:8px;font-style:italic;text-align:center}
+
+/* ── SECTIONS ── */
+.rpt-section{margin-bottom:28px;break-inside:avoid}
+.rpt-section-title{font-family:'Georgia',serif;font-size:16px;font-weight:700;color:#0c0f14;border-left:4px solid #c9a227;padding-left:12px;margin-bottom:12px;line-height:1.3}
+.rpt-section-body{padding-left:0;color:#374151}
+.rpt-section-body p{margin-bottom:8px;color:#374151}
+.rpt-section-body ul{margin:6px 0 8px 18px}
+.rpt-section-body li{margin-bottom:4px;color:#374151}
+.rpt-section-body li::marker{color:#c9a227}
+.rpt-section-divider{height:1px;background:#e5e7eb;margin:28px 0}
+
+/* ── BOM TABLE ── */
+.rpt-bom-section{margin-bottom:28px;break-inside:avoid}
+.rpt-bom-title{font-family:'Georgia',serif;font-size:16px;font-weight:700;color:#0c0f14;border-left:4px solid #2dd4bf;padding-left:12px;margin-bottom:12px}
+.rpt-table{width:100%;border-collapse:collapse;font-size:13px}
+.rpt-table th{background:#0c0f14;color:#c9a227;padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.rpt-table th:first-child{border-radius:6px 0 0 0}.rpt-table th:last-child{border-radius:0 6px 0 0}
+.rpt-table td{padding:9px 14px;border-bottom:1px solid #e5e7eb;color:#374151;vertical-align:middle}
+.rpt-table tr:last-child td{border-bottom:none}
+.rpt-table tr:nth-child(even) td{background:#f9fafb}
+.bom-pill{font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;display:inline-block}
+.pill-purchased{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+.pill-needed{background:#f3f4f6;color:#374151;border:1px solid #d1d5db}
+.rpt-bom-totals{display:flex;gap:24px;padding:14px 14px 0;border-top:2px solid #e5e7eb;margin-top:4px}
+.rpt-bom-stat{display:flex;flex-direction:column;gap:2px}
+.rpt-bom-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#6b7280;font-weight:600}
+.rpt-bom-stat-value{font-family:'Georgia',serif;font-size:22px;font-weight:700}
+.val-invested{color:#c9a227}.val-budgeted{color:#374151}.val-under{color:#059669}.val-over{color:#dc2626}
+
+/* ── TAGS ── */
+.rpt-tags-row{margin-bottom:24px}
+.rpt-tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;margin-right:6px;margin-bottom:4px}
+
+/* ── NEXT STEPS ── */
+.rpt-next-steps{background:linear-gradient(135deg,#f0fdf4,#f0f9ff);border:2px solid #86efac;border-radius:10px;padding:20px 24px;margin-bottom:28px;break-inside:avoid}
+.rpt-next-steps-title{font-family:'Georgia',serif;font-size:16px;font-weight:700;color:#065f46;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.rpt-next-steps-title::before{content:'▶';font-size:12px;color:#059669}
+.rpt-next-steps ul{padding-left:18px}
+.rpt-next-steps li{margin-bottom:8px;color:#065f46;font-size:13px}
+.rpt-next-steps li::marker{color:#059669}
+
+/* ── FOOTER ── */
+.rpt-footer{border-top:2px solid #e5e7eb;padding-top:16px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#9ca3af;margin-top:36px}
+.rpt-footer-logo{display:flex;align-items:center;gap:8px;font-family:'Georgia',serif;font-size:12px;color:#6b7280}
+.rpt-footer-mark{width:24px;height:24px;background:linear-gradient(135deg,#c9a227,#e8c060);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0c0f14}
+
+@media print{
+  body{background:#fff}
+  .rpt-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rpt-table th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rpt-next-steps{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style></head><body>
+
+<!-- REPORT HEADER -->
+<div class="rpt-header">
+  <div class="rpt-logo-row">
+    <div class="rpt-logo-mark">F</div>
+    <div><div class="rpt-logo-text">LazForge</div><div class="rpt-logo-sub">Project Command Center</div></div>
+  </div>
+  <div class="rpt-divider"></div>
+  <div class="rpt-project-title">${p.projectTitle}</div>
+  <div class="rpt-meta-grid">
+    <div class="rpt-meta-item">
+      <div class="rpt-meta-label">Category</div>
+      <div class="rpt-meta-value">${p.customLabel||p.template}</div>
+    </div>
+    <div class="rpt-meta-item">
+      <div class="rpt-meta-label">Status</div>
+      <div class="rpt-meta-value">${p.status}</div>
+    </div>
+    <div class="rpt-meta-item">
+      <div class="rpt-meta-label">Current Stage</div>
+      <div class="rpt-meta-value"><span class="rpt-stage-dot"></span>${p.activeStage||'Not set'}</div>
+    </div>
+  </div>
+  <div class="rpt-date-stamp">Generated ${dateStr} at ${timeStr}</div>
+</div>
+
+<!-- REPORT BODY -->
+<div class="rpt-body">
+
+  ${imgHtml}
+
+  ${(p.tags||[]).length ? `<div class="rpt-tags-row"><strong style="font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#6b7280">Tags: </strong>${tagHtml}</div>` : ''}
+
+  ${sectionsHtml}
+
+  ${p.bom.length ? `
+  <div class="rpt-section-divider"></div>
+  <div class="rpt-bom-section">
+    <div class="rpt-bom-title">Bill of Materials</div>
+    <table class="rpt-table">
+      <thead><tr><th>Item</th><th>Actual Cost</th><th>Budgeted</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${bomRows}</tbody>
+    </table>
+    <div class="rpt-bom-totals">
+      <div class="rpt-bom-stat"><span class="rpt-bom-stat-label">Invested</span><span class="rpt-bom-stat-value val-invested">$${invested.toFixed(2)}</span></div>
+      <div class="rpt-bom-stat"><span class="rpt-bom-stat-label">Budgeted</span><span class="rpt-bom-stat-value val-budgeted">$${budgeted.toFixed(2)}</span></div>
+      <div class="rpt-bom-stat"><span class="rpt-bom-stat-label">Variance</span><span class="rpt-bom-stat-value ${variance<=0?'val-under':'val-over'}">${variance<=0?'−':'+'}$${Math.abs(variance).toFixed(2)}</span></div>
+    </div>
+  </div>` : ''}
+
+  ${p.scratch ? `<div class="rpt-section"><div class="rpt-section-title">Scratch Pad / Quick Notes</div><div class="rpt-section-body"><p style="white-space:pre-wrap;font-family:monospace;font-size:12px;background:#f9fafb;padding:12px;border-radius:6px;border:1px solid #e5e7eb">${p.scratch.replace(/</g,'&lt;')}</p></div></div>` : ''}
+
+  <!-- NEXT STEPS -->
+  <div class="rpt-next-steps">
+    <div class="rpt-next-steps-title">Recommended Next Steps</div>
+    <ul id="rpt-next-list">__NEXT_STEPS__</ul>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="rpt-footer">
+    <div class="rpt-footer-logo">
+      <div class="rpt-footer-mark">F</div>
+      LazForge v2.0 — Project Command Center
+    </div>
+    <div>Confidential — Internal Team Use Only</div>
+    <div>${dateStr}</div>
+  </div>
+
+</div>
+<script>
+// Extract "Recommended Next Steps" or "Next Steps" from AI text and rebuild list
+(function(){
+  const raw = ${JSON.stringify(text)};
+  const lines = raw.split('\\n');
+  let inNextSteps = false, steps = [];
+  lines.forEach(line => {
+    const lower = line.toLowerCase();
+    if (lower.includes('next step') && (line.startsWith('#') || line.startsWith('**'))) { inNextSteps = true; return; }
+    if (inNextSteps && line.startsWith('#')) inNextSteps = false;
+    if (inNextSteps) {
+      const t = line.replace(/^[-•*\\d\\.\\s]+/,'').trim();
+      if (t) steps.push(t);
+    }
+  });
+  if (!steps.length) {
+    steps = [
+      'Review all forge log entries and verify decisions made so far.',
+      'Confirm all BOM items are sourced and reconcile the budget variance.',
+      'Schedule the next hands-on work session and update the project stage.',
+      'Document any new findings immediately in the Forge Log.',
+      'Share this report with all stakeholders for alignment.'
+    ];
+  }
+  document.getElementById('rpt-next-list').innerHTML = steps.map(s => '<li>'+s+'</li>').join('');
+  setTimeout(()=>window.print(),400);
+})();
+<\/script>
+</body></html>`;
+
   const w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><title>'+(p?p.projectTitle:'Summary')+'</title>'+
-    '<style>body{font-family:Georgia,serif;max-width:800px;margin:2rem auto;color:#111;line-height:1.7}pre{white-space:pre-wrap;font-family:inherit}</style></head>'+
-    '<body><pre>'+text.replace(/</g,'&lt;')+'</pre></body></html>');
-  w.document.close(); w.print();
+  w.document.write(html);
+  w.document.close();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2184,22 +2509,187 @@ function selectAllPrint(checked) {
 function doPrint() {
   const selected = new Set([...document.querySelectorAll('.print-check:checked')].map(cb=>cb.dataset.pid));
   if (!selected.size) { toast('Select at least one project.','error'); return; }
-  db.projects.forEach(p => {
-    const card = document.getElementById('pc-'+p.projectId);
-    if (card) {
-      if (!selected.has(p.projectId)) card.classList.add('print-hide');
-      else { card.classList.remove('print-hide'); expandedCards[p.projectId]='log'; }
-    }
-  });
   closeModal('printModal');
-  renderProjects();
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => db.projects.forEach(p => {
-      const card=document.getElementById('pc-'+p.projectId);
-      if (card) card.classList.remove('print-hide');
-    }), 600);
-  }, 200);
+
+  const selectedProjects = db.projects.filter(p => selected.has(p.projectId));
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  function buildProjectBlock(p, idx) {
+    const invested = p.bom.reduce((s,b)=>b.status==='Purchased'?s+parseFloat(b.cost||0):s,0);
+    const budgeted = p.bom.reduce((s,b)=>s+parseFloat(b.budget||0),0);
+    const variance = invested - budgeted;
+    const bomRows = p.bom.map(b=>`<tr>
+      <td>${b.item}</td><td>$${parseFloat(b.cost||0).toFixed(2)}</td>
+      <td>$${parseFloat(b.budget||0).toFixed(2)}</td>
+      <td><span class="bom-pill ${b.status==='Purchased'?'pill-purchased':'pill-needed'}">${b.status}</span></td>
+      <td>${b.date||'—'}</td></tr>`).join('');
+    const logEntries = p.forgeLog.map(l=>`<div class="log-block">
+      <div class="log-block-head"><span class="log-badge ${l.type==='AI_EXPORT'?'log-ai':'log-manual'}">${l.type==='AI_EXPORT'?'AI':'Manual'}</span>${l.label?`<span class="log-label">${l.label}</span>`:''}<span class="log-summ">${l.summary||'Entry'}</span><span class="log-date-s">${new Date(l.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span></div>
+      <div class="log-body">${(l.content||'').replace(/</g,'&lt;')}</div></div>`).join('');
+    const tagHtml = (p.tags||[]).map(t=>`<span class="rpt-tag">#${t}</span>`).join(' ');
+    const imgHtml = p.projectImage
+      ? `<div class="proj-img-block"><img class="proj-img" src="${p.projectImage}" alt="Project image"><div class="proj-img-cap">${p.projectImageName||'Project Reference'}</div></div>`
+      : '';
+    const stageColor = { Diagnostics:'#2563eb', Assessment:'#2563eb', Requirements:'#2563eb',
+      'Part Sourcing':'#d97706', Disassembly:'#d97706', Implementation:'#7c3aed',
+      Restoration:'#7c3aed', Brainstorming:'#7c3aed', Verification:'#059669',
+      'Final Build':'#059669', Completed:'#059669', Complete:'#059669' }[p.activeStage]||'#6b7280';
+    return `<div class="proj-block ${idx>0?'page-break':''}">
+      <div class="proj-header">
+        <div class="proj-header-left">
+          <div class="proj-num">PROJECT ${String(idx+1).padStart(2,'0')}</div>
+          <div class="proj-title-main">${p.projectTitle}</div>
+          <div class="proj-pills">
+            <span class="meta-pill">${p.customLabel||p.template}</span>
+            <span class="meta-pill" style="background:#f0fdf4;color:#065f46;border-color:#86efac">${p.status}</span>
+            ${p.activeStage?`<span class="meta-pill" style="background:#f8fafc;border-left:3px solid ${stageColor};color:${stageColor}">${p.activeStage}</span>`:''}
+          </div>
+          ${tagHtml?`<div style="margin-top:8px">${tagHtml}</div>`:''}
+        </div>
+        <div class="proj-header-stats">
+          <div class="stat-box"><div class="stat-label">Log Entries</div><div class="stat-val">${p.forgeLog.length}</div></div>
+          <div class="stat-box"><div class="stat-label">BOM Items</div><div class="stat-val">${p.bom.length}</div></div>
+          <div class="stat-box"><div class="stat-label">Invested</div><div class="stat-val" style="color:#c9a227">$${invested.toFixed(2)}</div></div>
+        </div>
+      </div>
+      ${imgHtml}
+      ${p.forgeLog.length?`<div class="sub-section"><div class="sub-title">Forge Log</div>${logEntries}</div>`:''}
+      ${p.bom.length?`<div class="sub-section"><div class="sub-title">Bill of Materials</div>
+        <table class="rpt-table"><thead><tr><th>Item</th><th>Actual</th><th>Budgeted</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>${bomRows}</tbody></table>
+        <div class="bom-totals-row">
+          <span class="bom-total">Invested: <strong style="color:#c9a227">$${invested.toFixed(2)}</strong></span>
+          <span class="bom-total">Budgeted: <strong>$${budgeted.toFixed(2)}</strong></span>
+          <span class="bom-total">Variance: <strong style="color:${variance<=0?'#059669':'#dc2626'}">${variance<=0?'−':'+'}$${Math.abs(variance).toFixed(2)}</strong></span>
+        </div></div>`:''}
+      ${p.scratch?`<div class="sub-section"><div class="sub-title">Notes / Scratch Pad</div><pre class="scratch-pre">${p.scratch.replace(/</g,'&lt;')}</pre></div>`:''}
+      <div class="next-steps-box">
+        <div class="next-steps-title">▶ Suggested Next Steps</div>
+        <ul><li>Review all log entries and confirm current stage is accurate.</li>
+        <li>Reconcile any outstanding BOM items and update statuses.</li>
+        <li>Schedule next work session and assign tasks from scratch pad.</li>
+        <li>Document findings in Forge Log immediately after work session.</li></ul>
+      </div>
+    </div>`;
+  }
+
+  const allBlocks = selectedProjects.map((p,i) => buildProjectBlock(p,i)).join('');
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>LazForge Team Report — ${dateStr}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Georgia',serif;background:#f8f7f4;color:#1a1a1a;font-size:13px;line-height:1.65}
+@page{margin:1.8cm 1.8cm 2.2cm;size:Letter}
+
+/* COVER HEADER */
+.report-cover{background:linear-gradient(135deg,#0c0f14 0%,#1a2232 100%);color:#fff;padding:40px 52px 36px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.cover-logo-row{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.cover-mark{width:52px;height:52px;background:linear-gradient(135deg,#c9a227,#e8c060);border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'Georgia',serif;font-weight:700;font-size:26px;color:#0c0f14;flex-shrink:0}
+.cover-logo-text{font-family:'Georgia',serif;font-size:22px;color:#e2e8f0}
+.cover-logo-sub{font-size:11px;color:#94a3b8;letter-spacing:1.2px;text-transform:uppercase}
+.cover-divider{height:1px;background:rgba(201,162,39,.35);margin:0 0 22px}
+.cover-title{font-size:13px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;margin-bottom:6px}
+.cover-subtitle{font-family:'Georgia',serif;font-size:26px;font-weight:700;color:#f1f5f9;margin-bottom:20px}
+.cover-meta{display:flex;gap:24px;font-size:12px;color:#94a3b8}
+.cover-meta strong{color:#e2e8f0}
+
+/* PROJECT BLOCK */
+.proj-block{padding:32px 0;border-bottom:2px solid #e5e7eb}
+.proj-block:last-child{border-bottom:none}
+.page-break{page-break-before:always;padding-top:0}
+.proj-header{display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;padding:18px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;border-left:4px solid #c9a227}
+.proj-header-left{flex:1;min-width:0}
+.proj-num{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#9ca3af;font-weight:700;margin-bottom:4px}
+.proj-title-main{font-family:'Georgia',serif;font-size:20px;font-weight:700;color:#0c0f14;margin-bottom:10px}
+.proj-pills{display:flex;gap:8px;flex-wrap:wrap}
+.meta-pill{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db}
+.rpt-tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;margin-right:4px}
+.proj-header-stats{display:flex;gap:12px;flex-shrink:0}
+.stat-box{text-align:center;padding:10px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;min-width:70px}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#6b7280;font-weight:700}
+.stat-val{font-family:'Georgia',serif;font-size:18px;font-weight:700;color:#0c0f14;margin-top:2px}
+
+/* PROJECT IMAGE */
+.proj-img-block{margin-bottom:20px;text-align:center}
+.proj-img{max-width:100%;max-height:280px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb}
+.proj-img-cap{font-size:11px;color:#6b7280;margin-top:6px;font-style:italic}
+
+/* SUB-SECTIONS */
+.sub-section{margin-bottom:20px}
+.sub-title{font-family:'Georgia',serif;font-size:14px;font-weight:700;color:#0c0f14;border-left:3px solid #c9a227;padding-left:10px;margin-bottom:10px}
+
+/* LOG */
+.log-block{border:1px solid #e5e7eb;border-radius:6px;margin-bottom:8px;overflow:hidden}
+.log-block-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+.log-badge{font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.log-ai{background:#d1fae5;color:#065f46}
+.log-manual{background:#fef3c7;color:#92400e}
+.log-label{font-size:10px;color:#6b7280;background:#f3f4f6;padding:1px 6px;border-radius:4px}
+.log-summ{font-size:12px;font-weight:600;color:#0c0f14;flex:1}
+.log-date-s{font-size:10px;color:#9ca3af;white-space:nowrap}
+.log-body{padding:10px 12px;font-size:12px;color:#374151;white-space:pre-wrap;line-height:1.6}
+
+/* BOM */
+.rpt-table{width:100%;border-collapse:collapse;font-size:12px}
+.rpt-table th{background:#0c0f14;color:#c9a227;padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rpt-table td{padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151}
+.rpt-table tr:last-child td{border-bottom:none}
+.rpt-table tr:nth-child(even) td{background:#f9fafb;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.bom-pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px}
+.pill-purchased{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+.pill-needed{background:#f3f4f6;color:#374151;border:1px solid #d1d5db}
+.bom-totals-row{display:flex;gap:20px;padding:10px 12px;border-top:2px solid #e5e7eb;font-size:12px;color:#6b7280}
+.bom-total{white-space:nowrap}
+
+/* NEXT STEPS */
+.next-steps-box{background:#f0fdf4;border:2px solid #86efac;border-radius:8px;padding:16px 18px;margin-top:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.next-steps-title{font-family:'Georgia',serif;font-size:13px;font-weight:700;color:#065f46;margin-bottom:10px}
+.next-steps-box ul{padding-left:16px}
+.next-steps-box li{margin-bottom:5px;color:#065f46;font-size:12px}
+
+/* SCRATCH */
+.scratch-pre{font-family:monospace;font-size:11px;background:#f9fafb;padding:10px;border-radius:6px;border:1px solid #e5e7eb;white-space:pre-wrap;color:#374151}
+
+/* FOOTER */
+.report-footer{background:#0c0f14;color:#94a3b8;padding:16px 52px;display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-top:32px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.footer-logo{display:flex;align-items:center;gap:8px;font-family:'Georgia',serif;font-size:12px;color:#6b7280}
+.footer-mark{width:22px;height:22px;background:linear-gradient(135deg,#c9a227,#e8c060);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0c0f14}
+.body-wrap{max-width:940px;margin:0 auto;padding:24px 52px 32px}
+</style></head><body>
+
+<div class="report-cover">
+  <div class="cover-logo-row">
+    <div class="cover-mark">F</div>
+    <div><div class="cover-logo-text">LazForge</div><div class="cover-logo-sub">Project Command Center · v2.0</div></div>
+  </div>
+  <div class="cover-divider"></div>
+  <div class="cover-title">Team Project Report</div>
+  <div class="cover-subtitle">${selectedProjects.length} Project${selectedProjects.length!==1?'s':''} — Full Detail</div>
+  <div class="cover-meta">
+    <div><strong>Generated</strong> ${dateStr} at ${timeStr}</div>
+    <div><strong>Projects</strong> ${selectedProjects.map(p=>p.projectTitle).join(' · ')}</div>
+  </div>
+</div>
+
+<div class="body-wrap">
+  ${allBlocks}
+</div>
+
+<div class="report-footer">
+  <div class="footer-logo"><div class="footer-mark">F</div>LazForge v2.0</div>
+  <div>Confidential — Internal Team Use Only</div>
+  <div>${dateStr}</div>
+</div>
+
+<script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2362,7 +2852,7 @@ function importJSON(e) {
       if(!confirm('Import '+imp.projects.length+' projects? New ones will be merged in.'))return;
       const existing=new Set(db.projects.map(p=>p.projectId));
       let added=0;
-      imp.projects.forEach(p=>{ if(!existing.has(p.projectId)){ if(!p.tags)p.tags=[]; if(!p.scratch)p.scratch=''; db.projects.push(p); added++; } });
+      imp.projects.forEach(p=>{ if(!existing.has(p.projectId)){ if(!p.tags)p.tags=[]; if(!p.scratch)p.scratch=''; if(!p.projectImage)p.projectImage=''; if(!p.projectImageName)p.projectImageName=''; db.projects.push(p); added++; } });
       saveDB(); renderProjects(); toast('Imported '+added+' project'+(added!==1?'s':'')+'.','success');
     }catch(err){toast('Import failed: '+err.message,'error');}
   };
